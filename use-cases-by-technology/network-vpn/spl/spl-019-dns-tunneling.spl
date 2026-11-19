@@ -1,0 +1,23 @@
+```
+id: SPL-019
+name: DNS tunneling indicators
+description: A host sends many unique, long queries to a single parent domain.
+platform: Splunk
+mitre_tactic: Command and Control
+mitre_technique: T1071.004 Application Layer Protocol: DNS
+severity: Medium
+data_source: index=dns
+false_positives: Content delivery and anti-malware lookups that use long encoded labels.
+tuning: Exclude known security-vendor and CDN domains via lookup.
+test_method: Send a series of long random-label queries to a lab domain.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=dns earliest=-1h
+| eval qlen=len(query)
+| eval parts=split(query,".")
+| eval parent=mvindex(parts,-2).".".mvindex(parts,-1)
+| stats count dc(query) AS unique_queries avg(qlen) AS avg_len BY src, parent
+| where unique_queries>=200 AND avg_len>=40
+| sort - unique_queries

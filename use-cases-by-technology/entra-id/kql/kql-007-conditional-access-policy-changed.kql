@@ -1,0 +1,32 @@
+// ======================================================================
+// id: KQL-007
+// name: Conditional Access policy created, changed or deleted
+// description: Any change to a Conditional Access policy, with higher severity for deletion or
+//    disabling.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Defense Evasion
+// mitre_technique: T1556.009 Modify Authentication Process: Conditional Access Policies
+// severity: High
+// data_source: AuditLogs
+// false_positives: Planned policy maintenance; report-only experiments by the identity team.
+// tuning: Maintain approved_actors for the change team; suppress report-only changes if desired.
+// test_method: Disable and re-enable a test Conditional Access policy in a lab tenant.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let approved_actors = dynamic(["ca-admin@contoso.com"]);   // placeholder: your change team
+AuditLogs
+| where TimeGenerated > ago(lookback)
+| where Category == "Policy"
+| where OperationName in ("Add conditional access policy", "Update conditional access policy", "Delete conditional access policy")
+| where Result == "success"
+| extend Actor = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName)),
+         ActorIP = tostring(InitiatedBy.user.ipAddress),
+         PolicyName = tostring(TargetResources[0].displayName),
+         Change = tostring(TargetResources[0].modifiedProperties)
+| extend IsApprovedActor = Actor in~ (approved_actors)
+| extend AlertSeverity = iff(OperationName has "Delete" or Change has "disabled", "High", "Medium")
+| project TimeGenerated, OperationName, PolicyName, Actor, ActorIP, IsApprovedActor, AlertSeverity, Change

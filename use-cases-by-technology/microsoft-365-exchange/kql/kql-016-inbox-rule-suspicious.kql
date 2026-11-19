@@ -1,0 +1,36 @@
+// ======================================================================
+// id: KQL-016
+// name: Suspicious inbox rule that hides or deletes mail
+// description: Inbox rules that delete, mark as read or move messages to rarely used folders,
+//    especially with sensitive keywords.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Defense Evasion
+// mitre_technique: T1564.008 Hide Artifacts: Email Hiding Rules
+// severity: High
+// data_source: OfficeActivity
+// false_positives: Newsletter or notification clean-up rules created by users.
+// tuning: Raise min_score; tune the keyword list to local language; exclude rules created by
+//    Exchange admins during migrations.
+// test_method: Create a rule that moves messages containing the word invoice to an RSS folder and marks
+//    them read.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let min_score = 2;
+let suspicious_keywords = dynamic(["invoice", "payment", "password", "security", "wire", "bank", "verify", "helpdesk", "unusual"]);
+let hidden_folders = dynamic(["RSS Feeds", "RSS Subscriptions", "Archive", "Conversation History", "Deleted Items", "Junk Email"]);
+OfficeActivity
+| where TimeGenerated > ago(lookback)
+| where OfficeWorkload == "Exchange"
+| where Operation in ("New-InboxRule", "Set-InboxRule")
+| extend Params = tostring(Parameters)
+| extend DeletesMessage = Params matches regex @'(?i)"Name":"DeleteMessage","Value":"True"',
+         MarksRead = Params matches regex @'(?i)"Name":"MarkAsRead","Value":"True"',
+         MovesToHiddenFolder = Params has_any (hidden_folders),
+         HasKeyword = Params has_any (suspicious_keywords)
+| extend Score = toint(DeletesMessage) * 2 + toint(MarksRead) + toint(MovesToHiddenFolder) + toint(HasKeyword)
+| where Score >= min_score
+| project TimeGenerated, UserId, ClientIP, Operation, Score, DeletesMessage, MarksRead, MovesToHiddenFolder, HasKeyword, Params

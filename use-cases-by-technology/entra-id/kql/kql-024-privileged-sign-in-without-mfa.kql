@@ -1,0 +1,27 @@
+// ======================================================================
+// id: KQL-024
+// name: Privileged account signed in with single-factor authentication
+// description: Successful sign-in by an account in the PrivilegedAccounts watchlist where only a single
+//    factor was required.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Initial Access
+// mitre_technique: T1078.004 Valid Accounts: Cloud Accounts
+// severity: High
+// data_source: SigninLogs; Watchlist PrivilegedAccounts
+// false_positives: Break-glass accounts that are excluded from MFA by design.
+// tuning: Exclude break-glass accounts and alert on every use of them in a separate rule.
+// test_method: Sign in with a lab privileged account from a Conditional Access exclusion.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let PrivAccounts = _GetWatchlist('PrivilegedAccounts')
+    | project UserPrincipalName = tolower(tostring(SearchKey));
+SigninLogs
+| where TimeGenerated > ago(lookback)
+| where ResultType == "0"
+| where AuthenticationRequirement == "singleFactorAuthentication"
+| where tolower(UserPrincipalName) in (PrivAccounts)
+| project TimeGenerated, UserPrincipalName, IPAddress, AppDisplayName, ConditionalAccessStatus, ClientAppUsed, DeviceDetail

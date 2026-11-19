@@ -1,0 +1,33 @@
+// ======================================================================
+// id: KQL-004
+// name: Brute force: many password failures for one account
+// description: A single account receives many invalid-password failures from the same source in a short
+//    window.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Credential Access
+// mitre_technique: T1110.001 Brute Force: Password Guessing
+// severity: Medium
+// data_source: SigninLogs
+// false_positives: Expired saved credentials on a mobile device or mail client; service accounts with a
+//    stale secret.
+// tuning: Exclude known service accounts and trusted IPs; raise failure_threshold; add a lockout
+//    correlation.
+// test_method: Attempt more than 20 wrong-password sign-ins against a lab account from a single IP.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let failure_threshold = 20;
+let invalid_password_codes = dynamic(["50126"]);
+SigninLogs
+| where TimeGenerated > ago(lookback)
+| where ResultType in (invalid_password_codes)
+| summarize Failures = count(),
+            FirstSeen = min(TimeGenerated),
+            LastSeen = max(TimeGenerated),
+            Apps = make_set(AppDisplayName, 5)
+    by UserPrincipalName, IPAddress
+| where Failures >= failure_threshold
+| project FirstSeen, LastSeen, UserPrincipalName, IPAddress, Failures, Apps

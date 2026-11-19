@@ -1,0 +1,34 @@
+// ======================================================================
+// id: KQL-023
+// name: WAF block spike against a web application
+// description: A high number of blocked requests in a short interval on an Application Gateway WAF.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Initial Access
+// mitre_technique: T1190 Exploit Public-Facing Application
+// severity: Medium
+// data_source: AzureDiagnostics
+// false_positives: Vulnerability scans run by the security team; application releases that trigger
+//    legitimate rule matches.
+// tuning: Exclude scanner IPs; compare against a per-application baseline; adapt column names for
+//    Front Door logs.
+// test_method: Send a burst of requests with common attack strings to a lab application behind the WAF.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let bin_size = 5m;
+let min_blocks = 50;
+AzureDiagnostics
+| where TimeGenerated > ago(lookback)
+| where ResourceType == "APPLICATIONGATEWAYS" and OperationName == "ApplicationGatewayFirewall"
+| where action_s in~ ("Blocked", "Block")
+| summarize Blocks = count(),
+            DistinctClients = dcount(clientIp_s),
+            TopClients = make_set(clientIp_s, 5),
+            TopRules = make_set(ruleId_s, 10),
+            Hosts = make_set(hostname_s, 5)
+    by Window = bin(TimeGenerated, bin_size), _ResourceId
+| where Blocks >= min_blocks
+| project Window, _ResourceId, Blocks, DistinctClients, TopClients, TopRules, Hosts

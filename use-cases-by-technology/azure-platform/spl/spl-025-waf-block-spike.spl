@@ -1,0 +1,21 @@
+```
+id: SPL-025
+name: WAF block spike
+description: A high number of blocked requests against a web application within a short interval.
+platform: Splunk
+mitre_tactic: Initial Access
+mitre_technique: T1190 Exploit Public-Facing Application
+severity: Medium
+data_source: index=waf
+false_positives: Authorized scans; releases that trigger legitimate rule matches.
+tuning: Exclude scanner addresses; baseline per application.
+test_method: Send a burst of requests with common attack strings to a lab application.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=waf action IN ("blocked","block") earliest=-1h
+| bin _time span=5m
+| stats count AS blocks dc(src) AS distinct_clients values(signature) AS rules BY _time, dest
+| where blocks>=50
+| sort - blocks

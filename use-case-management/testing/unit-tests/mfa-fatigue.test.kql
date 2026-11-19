@@ -1,0 +1,27 @@
+// Unit test for KQL-002 (MFA fatigue) using synthetic events.
+// Expected result: one row for user.one@contoso.com with Denials 6 and SuccessAfterDenials 1.
+// user.two@contoso.com has only two denials and must NOT appear.
+let SigninLogs = datatable(TimeGenerated:datetime, UserPrincipalName:string, IPAddress:string, ResultType:string)
+[
+    datetime(2026-01-15 09:01:00), "user.one@contoso.com", "203.0.113.50", "500121",
+    datetime(2026-01-15 09:02:00), "user.one@contoso.com", "203.0.113.50", "500121",
+    datetime(2026-01-15 09:03:00), "user.one@contoso.com", "203.0.113.50", "500121",
+    datetime(2026-01-15 09:04:00), "user.one@contoso.com", "203.0.113.50", "500121",
+    datetime(2026-01-15 09:05:00), "user.one@contoso.com", "203.0.113.50", "500121",
+    datetime(2026-01-15 09:06:00), "user.one@contoso.com", "203.0.113.50", "500121",
+    datetime(2026-01-15 09:20:00), "user.one@contoso.com", "203.0.113.50", "0",
+    datetime(2026-01-15 09:10:00), "user.two@contoso.com", "198.51.100.8", "500121",
+    datetime(2026-01-15 09:11:00), "user.two@contoso.com", "198.51.100.8", "500121"
+];
+let min_mfa_denials = 5;
+let window = 10m;
+let Denials = SigninLogs
+    | where ResultType == "500121"
+    | summarize Denials = count(), LastDenial = max(TimeGenerated) by UserPrincipalName, Window = bin(TimeGenerated, window)
+    | summarize Denials = sum(Denials), LastDenial = max(LastDenial) by UserPrincipalName
+    | where Denials >= min_mfa_denials;
+let Successes = SigninLogs | where ResultType == "0" | project UserPrincipalName, SuccessTime = TimeGenerated;
+Denials
+| join kind=leftouter Successes on UserPrincipalName
+| extend SuccessAfterDenials = toint(isnotnull(SuccessTime) and SuccessTime >= LastDenial and SuccessTime <= LastDenial + 1h)
+| project UserPrincipalName, Denials, SuccessAfterDenials

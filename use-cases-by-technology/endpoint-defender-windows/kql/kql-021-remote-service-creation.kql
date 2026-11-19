@@ -1,0 +1,26 @@
+// ======================================================================
+// id: KQL-021
+// name: Suspicious service installed (remote execution pattern)
+// description: A Windows service is installed with an image path typical of remote execution tooling or
+//    a network share.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Persistence
+// mitre_technique: T1543.003 Create or Modify System Process: Windows Service
+// severity: High
+// data_source: SecurityEvent
+// false_positives: Software installers; endpoint management agents that create services from shares.
+// tuning: Exclude known installer service names and management servers; enable event 4697 auditing
+//    on endpoints.
+// test_method: Install a test service whose image path starts with cmd.exe /c on a lab host.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let suspicious_image_terms = dynamic(["PSEXESVC", "%COMSPEC%", "cmd.exe", "powershell", "pwsh", "mshta", "rundll32", "regsvr32"]);
+SecurityEvent
+| where TimeGenerated > ago(lookback)
+| where EventID == 4697
+| where ServiceFileName has_any (suspicious_image_terms) or ServiceFileName startswith @"\\"
+| project TimeGenerated, Computer, SubjectDomainName, SubjectUserName, ServiceName, ServiceFileName, ServiceType

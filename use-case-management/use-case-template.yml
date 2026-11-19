@@ -1,0 +1,39 @@
+# Detection use case definition (generic template).
+# Replace every <PLACEHOLDER>. Fictional company used in examples: Contoso Ltd.
+id: <UC-ID>                       # e.g. KQL-029 or SPL-026; unique, never reused
+name: <Short, specific name>
+version: 1
+status: Draft                     # Draft | Testing | Production | Deprecated
+owner: <OWNER>
+review_date: <YYYY-MM-DD>         # next scheduled review
+objective: >
+  <What adversary behavior or control failure does this detect, and why does it matter to Contoso Ltd.?>
+platform: <Microsoft Sentinel | Defender XDR | Splunk>
+mitre:
+  tactic: <Tactic>
+  technique: <T0000.000>
+  sub_techniques: []
+data_sources:
+  - table_or_index: <SigninLogs | index=wineventlog>
+    required_fields: [<field1>, <field2>]
+    prerequisite: <audit policy, connector or diagnostic setting that must be enabled>
+logic:
+  summary: <Plain-language description of the rule>
+  query_file: <use-cases-by-technology/<technology>/kql/kql-000-example.kql | .../spl/spl-000-example.spl>
+  schedule: <every 15m, lookback 1h>
+thresholds:
+  - name: <parameter name used in the query>
+    default: <value>
+    rationale: <why this value>
+severity: <Informational | Low | Medium | High>
+false_positives:
+  - <Known benign scenario>
+tuning_guidance:
+  - <Exclusion, threshold change or enrichment to try first>
+response_playbook: <link or path to the response playbook>
+test_method:
+  approach: <Atomic Red Team | lab simulation | synthetic events>
+  reference: <testing/README.md section or test id>
+  acceptance_criteria:
+    - <Alert fires within N minutes for the positive test>
+    - <No alert for the benign baseline test>

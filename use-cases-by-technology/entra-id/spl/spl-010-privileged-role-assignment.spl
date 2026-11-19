@@ -1,0 +1,21 @@
+```
+id: SPL-010
+name: Privileged directory role assigned
+description: Member added to a directory role in the identity provider audit log.
+platform: Splunk
+mitre_tactic: Persistence
+mitre_technique: T1098.003 Account Manipulation: Additional Cloud Roles
+severity: High
+data_source: index=azure (audit logs)
+false_positives: Approved joiner, mover or break-glass activity.
+tuning: Correlate with change tickets; exclude the governance automation identity.
+test_method: Assign a privileged role to a lab user.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=azure sourcetype="mscs:azure:eventhub" category=AuditLogs operationName IN ("Add member to role","Add eligible member to role") earliest=-1h
+| eval actor=coalesce('properties.initiatedBy.user.userPrincipalName','properties.initiatedBy.app.displayName')
+| eval target='properties.targetResources{}.userPrincipalName'
+| table _time operationName actor target 'properties.targetResources{}.displayName' result
+| sort - _time

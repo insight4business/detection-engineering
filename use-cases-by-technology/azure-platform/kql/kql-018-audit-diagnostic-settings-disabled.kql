@@ -1,0 +1,37 @@
+// ======================================================================
+// id: KQL-018
+// name: Audit or diagnostic logging disabled
+// description: Diagnostic settings or log workspaces are deleted, or diagnostic settings are written
+//    with logging disabled.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Defense Evasion
+// mitre_technique: T1562.008 Impair Defenses: Disable or Modify Cloud Logs
+// severity: High
+// data_source: AzureActivity
+// false_positives: Decommissioning of a resource or workspace consolidation approved through change
+//    control.
+// tuning: Exclude decommission pipelines; always keep a second detection on the absence of
+//    expected logs.
+// test_method: Delete a diagnostic setting on a lab resource.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let Deleted = AzureActivity
+    | where TimeGenerated > ago(lookback)
+    | where OperationNameValue in~ (
+        "MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE",
+        "MICROSOFT.OPERATIONALINSIGHTS/WORKSPACES/DELETE")
+    | where ActivityStatusValue in~ ("Success", "Succeeded")
+    | extend Finding = "Logging object deleted";
+let Disabled = AzureActivity
+    | where TimeGenerated > ago(lookback)
+    | where OperationNameValue =~ "MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/WRITE"
+    | where ActivityStatusValue in~ ("Success", "Succeeded")
+    | extend Body = tostring(Properties_d.requestbody)
+    | where Body matches regex @'"enabled"\s*:\s*false'
+    | extend Finding = "Diagnostic setting written with logging disabled";
+union Deleted, Disabled
+| project TimeGenerated, Caller, CallerIpAddress, OperationNameValue, Finding, ResourceGroup, Resource, SubscriptionId, _ResourceId

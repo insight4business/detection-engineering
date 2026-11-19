@@ -1,0 +1,22 @@
+```
+id: SPL-005
+name: Firewall deny spike by source
+description: A source generates far more denied connections than its own recent baseline.
+platform: Splunk
+mitre_tactic: Discovery
+mitre_technique: T1046 Network Service Discovery
+severity: Low
+data_source: index=firewall
+false_positives: Misconfigured hosts, vulnerability scans, application deployments.
+tuning: Exclude scanner ranges; adjust the sigma multiplier and minimum count.
+test_method: Run a port scan from a lab host against a blocked range.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=firewall action IN ("blocked","denied","deny","drop") earliest=-4h
+| bin _time span=5m
+| stats count BY _time, src
+| eventstats avg(count) AS avg_count stdev(count) AS sd_count BY src
+| where count>=100 AND count>(avg_count+3*sd_count)
+| sort - count

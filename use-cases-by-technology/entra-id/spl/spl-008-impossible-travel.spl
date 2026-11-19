@@ -1,0 +1,30 @@
+```
+id: SPL-008
+name: Impossible travel between sign-ins
+description: Successive successful sign-ins by one user whose geolocations imply an impossible travel
+   speed.
+platform: Splunk
+mitre_tactic: Initial Access
+mitre_technique: T1078.004 Valid Accounts: Cloud Accounts
+severity: Medium
+data_source: index=azure (sign-in logs)
+false_positives: VPN and proxy egress in other regions; mobile carrier gateways.
+tuning: Exclude corporate egress via lookup; require a country change; raise the speed limit.
+test_method: Sign in to a lab account from two distant VPN locations in quick succession.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=azure sourcetype="mscs:azure:eventhub" category=SignInLogs "properties.status.errorCode"=0 earliest=-1d
+| eval user='properties.userPrincipalName', src_ip='properties.ipAddress'
+| iplocation src_ip
+| where isnotnull(lat) AND isnotnull(lon)
+| sort 0 user _time
+| streamstats current=f window=1 last(lat) AS prev_lat last(lon) AS prev_lon last(_time) AS prev_time last(src_ip) AS prev_ip BY user
+| where isnotnull(prev_lat) AND src_ip!=prev_ip
+| eval dist_km=6371*acos(min(1,sin(lat*pi()/180)*sin(prev_lat*pi()/180)+cos(lat*pi()/180)*cos(prev_lat*pi()/180)*cos((lon-prev_lon)*pi()/180)))
+| eval hours=(_time-prev_time)/3600
+| where dist_km>500 AND hours>0
+| eval speed_kmh=round(dist_km/hours,0)
+| where speed_kmh>900
+| table _time user prev_ip src_ip dist_km speed_kmh Country

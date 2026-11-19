@@ -1,0 +1,25 @@
+```
+id: SPL-006
+name: Mailbox forwarding or redirect rule (Office 365)
+description: Inbox rule or mailbox setting that forwards or redirects mail.
+platform: Splunk
+mitre_tactic: Collection
+mitre_technique: T1114.003 Email Collection: Email Forwarding Rule
+severity: High
+data_source: index=o365
+false_positives: Approved forwarding exceptions; shared mailbox set-up.
+tuning: Add accepted domains to an allow lookup; alert on external targets only in mature
+   estates.
+test_method: Create an inbox rule that forwards to an external lab address.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=o365 sourcetype="o365:management:activity" Workload=Exchange Operation IN ("New-InboxRule","Set-InboxRule","Set-Mailbox") earliest=-1h
+| eval params=mvzip('Parameters{}.Name','Parameters{}.Value',"=")
+| eval fwd=mvfilter(match(params,"^(ForwardTo|RedirectTo|ForwardAsAttachmentTo|ForwardingSmtpAddress|ForwardingAddress)="))
+| where isnotnull(fwd)
+| eval fwd_domain=lower(replace(mvindex(fwd,0),".*@",""))
+| where NOT in(fwd_domain,"contoso.com")
+| table _time UserId ClientIP Operation fwd fwd_domain
+| sort - _time

@@ -1,0 +1,7 @@
+UserPrincipalName,Role,Tier,BreakGlass,Owner
+admin.alpha@contoso.com,Global Administrator,0,false,identity-team
+admin.bravo@contoso.com,Security Administrator,0,false,security-team
+admin.charlie@contoso.com,Exchange Administrator,1,false,messaging-team
+admin.delta@contoso.com,User Administrator,1,false,service-desk-lead
+breakglass.one@contoso.com,Global Administrator,0,true,identity-team
+breakglass.two@contoso.com,Global Administrator,0,true,identity-team

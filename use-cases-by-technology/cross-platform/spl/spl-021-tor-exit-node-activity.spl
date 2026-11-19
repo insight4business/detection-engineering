@@ -1,0 +1,22 @@
+```
+id: SPL-021
+name: Activity from TOR exit nodes
+description: Sign-in or perimeter events whose source address matches the TOR exit node lookup.
+platform: Splunk
+mitre_tactic: Command and Control
+mitre_technique: T1090.003 Proxy: Multi-hop Proxy
+severity: Medium
+data_source: index=azure; index=firewall; lookup tor_exit_nodes
+false_positives: Privacy-conscious users; stale lookup entries.
+tuning: Refresh the lookup daily from a threat intelligence feed.
+test_method: Connect through the TOR browser after adding a live exit node to the lookup.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+(index=azure sourcetype="mscs:azure:eventhub" category=SignInLogs) OR (index=firewall) earliest=-1d
+| eval src_ip=coalesce('properties.ipAddress', src)
+| lookup tor_exit_nodes ip AS src_ip OUTPUT is_tor
+| where is_tor="true"
+| stats count values(index) AS sources values(properties.userPrincipalName) AS users BY src_ip
+| sort - count

@@ -1,0 +1,35 @@
+// ======================================================================
+// id: KQL-028
+// name: Kerberoasting: many service tickets with weak encryption
+// description: One client requests service tickets for many distinct service names using RC4
+//    encryption.
+// platform: Microsoft Sentinel
+// schedule: every 1h, lookback 1h
+// mitre_tactic: Credential Access
+// mitre_technique: T1558.003 Steal or Forge Kerberos Tickets: Kerberoasting
+// severity: High
+// data_source: SecurityEvent
+// false_positives: Legacy applications that only support RC4; vulnerability scanners.
+// tuning: Exclude known legacy service names; raise min_distinct_services; enforce AES-only on
+//    service accounts.
+// test_method: Request service tickets for several SPNs in a lab domain with a roasting tool or built-
+//    in Windows commands.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let min_distinct_services = 5;
+SecurityEvent
+| where TimeGenerated > ago(lookback)
+| where EventID == 4769
+| where TicketEncryptionType == "0x17"
+| where ServiceName !endswith "$" and ServiceName !~ "krbtgt"
+| summarize Tickets = count(),
+            DistinctServices = dcount(ServiceName),
+            Services = make_set(ServiceName, 20),
+            FirstSeen = min(TimeGenerated),
+            LastSeen = max(TimeGenerated)
+    by TargetUserName, IpAddress
+| where DistinctServices >= min_distinct_services
+| project FirstSeen, LastSeen, TargetUserName, IpAddress, Tickets, DistinctServices, Services

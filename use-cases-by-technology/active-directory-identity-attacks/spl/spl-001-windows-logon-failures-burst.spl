@@ -1,0 +1,23 @@
+```
+id: SPL-001
+name: Windows logon failures from one source
+description: High number of failed logons (4625) from a single source host or address.
+platform: Splunk
+mitre_tactic: Credential Access
+mitre_technique: T1110 Brute Force
+severity: Medium
+data_source: index=wineventlog (Security)
+false_positives: Expired credentials on services or mapped drives; vulnerability scanners.
+tuning: Exclude scanners and known management hosts via a lookup; raise the threshold for
+   servers with many service logons.
+test_method: Generate 25 failed logons against a lab host with a wrong password.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=wineventlog sourcetype="WinEventLog:Security" EventCode=4625 earliest=-1h
+| where isnotnull(src) AND src!="-" AND src!="::1"
+| stats count AS failures dc(user) AS distinct_accounts values(user) AS accounts min(_time) AS first_seen max(_time) AS last_seen BY src, host
+| where failures>=20
+| convert ctime(first_seen) ctime(last_seen)
+| sort - failures

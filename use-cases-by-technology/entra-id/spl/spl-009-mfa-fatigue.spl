@@ -1,0 +1,22 @@
+```
+id: SPL-009
+name: MFA fatigue: repeated MFA denials
+description: Many MFA denials or time-outs for one user in a short window.
+platform: Splunk
+mitre_tactic: Credential Access
+mitre_technique: T1621 Multi-Factor Authentication Request Generation
+severity: High
+data_source: index=azure (sign-in logs)
+false_positives: Broken authenticator app or poor connectivity.
+tuning: Raise the threshold; mark High when a success follows within one hour.
+test_method: Deny or ignore five MFA prompts for a lab user.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=azure sourcetype="mscs:azure:eventhub" category=SignInLogs "properties.status.errorCode"=500121 earliest=-1h
+| eval user='properties.userPrincipalName', src_ip='properties.ipAddress'
+| bin _time span=10m
+| stats count AS denials values(src_ip) AS source_ips BY _time, user
+| where denials>=5
+| sort - denials

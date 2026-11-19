@@ -1,0 +1,21 @@
+```
+id: SPL-024
+name: Kerberoasting: many RC4 service tickets
+description: One client requests RC4 service tickets for many distinct service names.
+platform: Splunk
+mitre_tactic: Credential Access
+mitre_technique: T1558.003 Steal or Forge Kerberos Tickets: Kerberoasting
+severity: High
+data_source: index=wineventlog (Security)
+false_positives: Legacy applications that support only RC4; scanners.
+tuning: Exclude known legacy services; enforce AES on service accounts.
+test_method: Request service tickets for several SPNs in a lab domain.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=wineventlog sourcetype="WinEventLog:Security" EventCode=4769 Ticket_Encryption_Type="0x17" earliest=-1h
+| where NOT match(Service_Name,"\$$") AND lower(Service_Name)!="krbtgt"
+| stats count AS tickets dc(Service_Name) AS distinct_services values(Service_Name) AS services BY Account_Name, Client_Address
+| where distinct_services>=5
+| sort - distinct_services

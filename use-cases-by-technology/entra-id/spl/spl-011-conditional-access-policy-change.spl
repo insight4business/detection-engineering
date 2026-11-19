@@ -1,0 +1,22 @@
+```
+id: SPL-011
+name: Conditional Access policy changed
+description: Conditional Access policy created, updated or deleted.
+platform: Splunk
+mitre_tactic: Defense Evasion
+mitre_technique: T1556.009 Modify Authentication Process: Conditional Access Policies
+severity: High
+data_source: index=azure (audit logs)
+false_positives: Planned policy maintenance.
+tuning: Maintain a lookup of approved actors; suppress report-only changes if desired.
+test_method: Disable and re-enable a test policy in a lab tenant.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=azure sourcetype="mscs:azure:eventhub" category=AuditLogs operationName="*conditional access policy" earliest=-1h
+| eval actor=coalesce('properties.initiatedBy.user.userPrincipalName','properties.initiatedBy.app.displayName')
+| eval policy='properties.targetResources{}.displayName'
+| eval severity=if(like(operationName,"Delete%"),"high","medium")
+| table _time operationName policy actor severity
+| sort - _time

@@ -1,0 +1,35 @@
+// ======================================================================
+// id: KQL-003
+// name: Risky sign-in detected by identity protection
+// description: Sign-ins flagged medium or high risk, or in an at-risk state, with escalation for VIP
+//    users from a watchlist.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Initial Access
+// mitre_technique: T1078 Valid Accounts
+// severity: Medium
+// data_source: SigninLogs; Watchlist VIPUsers
+// false_positives: Legitimate users on new devices or networks; risk events already remediated by the user.
+// tuning: Raise risk_levels to high only; exclude risk states already remediated; require a non-
+//    compliant device.
+// test_method: Use a lab account with a sign-in from an anonymizer network to trigger a risk event, or
+//    simulate through the identity protection test tooling.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let risk_levels = dynamic(["high", "medium"]);
+let open_risk_states = dynamic(["atRisk", "confirmedCompromised"]);
+let VipUsers = _GetWatchlist('VIPUsers')
+    | project UserPrincipalName = tolower(tostring(SearchKey));
+SigninLogs
+| where TimeGenerated > ago(lookback)
+| where RiskLevelDuringSignIn in (risk_levels) or RiskState in (open_risk_states)
+| where RiskState !in ("remediated", "dismissed", "confirmedSafe")
+| extend IsVip = tolower(UserPrincipalName) in (VipUsers)
+| extend AlertSeverity = case(
+        IsVip or RiskLevelDuringSignIn == "high" or RiskState == "confirmedCompromised", "High",
+        "Medium")
+| project TimeGenerated, UserPrincipalName, IsVip, AlertSeverity, RiskLevelDuringSignIn, RiskState, RiskDetail,
+          RiskEventTypes_V2, IPAddress, AppDisplayName, ConditionalAccessStatus, ResultType

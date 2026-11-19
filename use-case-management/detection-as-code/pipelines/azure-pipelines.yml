@@ -1,0 +1,40 @@
+# Example validation pipeline for Azure DevOps (generic, with placeholders).
+# Adapt names and paths before use. This file does not imply a pipeline exists in any environment.
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - <REPO_FOLDER>/02-detection-engineering/**
+
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - <REPO_FOLDER>/02-detection-engineering/**
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  rulesRoot: <REPO_FOLDER>/02-detection-engineering
+
+steps:
+  - checkout: self
+
+  - task: UsePythonVersion@0
+    displayName: Use Python 3
+    inputs:
+      versionSpec: "3.x"
+
+  - script: python -m pip install --upgrade pip pyyaml
+    displayName: Install dependencies
+
+  - script: python $(rulesRoot)/use-case-management/detection-as-code/pipelines/lint_rules.py $(rulesRoot)
+    displayName: Validate YAML and lint rule headers
+
+  # Optional: publish rules to the SIEM after validation. Add a deployment stage that uses
+  # a service connection named <SERVICE_CONNECTION> and an approval gate on the environment <ENVIRONMENT>.

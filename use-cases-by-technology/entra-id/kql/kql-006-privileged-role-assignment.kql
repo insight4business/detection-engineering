@@ -1,0 +1,38 @@
+// ======================================================================
+// id: KQL-006
+// name: Privileged directory role assigned
+// description: A user or service principal is added to a privileged directory role, permanently or as
+//    eligible.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Persistence
+// mitre_technique: T1098.003 Account Manipulation: Additional Cloud Roles
+// severity: High
+// data_source: AuditLogs
+// false_positives: Approved joiner, mover or break-glass activity; scheduled access reviews.
+// tuning: Correlate with change tickets; exclude the identity governance service account; keep the
+//    role list aligned with your tiering model.
+// test_method: Assign a privileged role to a lab user and confirm the alert includes actor, target and
+//    role.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let privileged_roles = dynamic([
+    "Global Administrator", "Privileged Role Administrator", "Privileged Authentication Administrator",
+    "Security Administrator", "Exchange Administrator", "SharePoint Administrator", "User Administrator",
+    "Application Administrator", "Cloud Application Administrator", "Conditional Access Administrator",
+    "Authentication Administrator", "Helpdesk Administrator"]);
+AuditLogs
+| where TimeGenerated > ago(lookback)
+| where OperationName in ("Add member to role", "Add eligible member to role")   // PIM operations use a different layout; add them after checking your logs
+| where Result == "success"
+| extend Actor = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName)),
+         ActorIP = tostring(InitiatedBy.user.ipAddress),
+         Target = tostring(TargetResources[0].userPrincipalName)
+| mv-apply Prop = TargetResources[0].modifiedProperties on (
+    where tostring(Prop.displayName) == "Role.DisplayName"
+    | extend RoleName = trim('"', tostring(Prop.newValue)))
+| where RoleName in~ (privileged_roles)
+| project TimeGenerated, OperationName, Actor, ActorIP, Target, RoleName, CorrelationId

@@ -1,0 +1,34 @@
+// ======================================================================
+// id: KQL-022
+// name: Suspicious PowerShell command line
+// description: PowerShell started with encoded commands, download cradles or evasion switches, scored
+//    by number of indicators.
+// platform: Microsoft Defender XDR
+// schedule: every 1h, lookback 1h
+// mitre_tactic: Execution
+// mitre_technique: T1059.001 Command and Scripting Interpreter: PowerShell
+// severity: Medium
+// data_source: DeviceProcessEvents
+// false_positives: Legitimate management scripts that use encoded commands; software deployment tools.
+// tuning: Add allowed initiating processes; require min_score of 3 in noisy estates; add script
+//    block logging correlation.
+// test_method: Run an encoded harmless command with -NoProfile and a web request to a lab URL on a test
+//    endpoint.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let min_score = 2;
+let allowed_parents = dynamic(["ccmexec.exe", "intunemanagementextension.exe"]);
+DeviceProcessEvents
+| where Timestamp > ago(lookback)
+| where FileName in~ ("powershell.exe", "pwsh.exe", "powershell_ise.exe")
+| where InitiatingProcessFileName !in~ (allowed_parents)
+| extend EncodedCommand = ProcessCommandLine matches regex @'(?i)\s-e(nc|ncodedcommand)?\s+[A-Za-z0-9+/=]{20,}',
+         DownloadCradle = ProcessCommandLine has_any ("DownloadString", "DownloadFile", "Invoke-WebRequest", "Net.WebClient", "Start-BitsTransfer"),
+         InvokeExpression = ProcessCommandLine has_any ("IEX", "Invoke-Expression"),
+         EvasionSwitch = ProcessCommandLine matches regex @'(?i)-(nop|noprofile|w(indowstyle)?\s+hidden|ep\s+bypass|executionpolicy\s+bypass)'
+| extend Score = toint(EncodedCommand) + toint(DownloadCradle) + toint(InvokeExpression) + toint(EvasionSwitch)
+| where Score >= min_score
+| project Timestamp, DeviceName, AccountName, InitiatingProcessFileName, FileName, Score, ProcessCommandLine

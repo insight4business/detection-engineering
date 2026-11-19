@@ -1,0 +1,20 @@
+```
+id: SPL-013
+name: Windows event log cleared
+description: Security log cleared (1102) or any log cleared (System 104).
+platform: Splunk
+mitre_tactic: Defense Evasion
+mitre_technique: T1070.001 Indicator Removal: Clear Windows Event Logs
+severity: High
+data_source: index=wineventlog
+false_positives: Imaging and lab maintenance.
+tuning: Exclude imaging servers; treat every other event as an incident.
+test_method: Clear the Security log on a lab host.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=wineventlog ((sourcetype="WinEventLog:Security" EventCode=1102) OR (sourcetype="WinEventLog:System" EventCode=104)) earliest=-1h
+| eval actor=coalesce(src_user, Subject_Account_Name, user)
+| table _time host EventCode actor
+| sort - _time

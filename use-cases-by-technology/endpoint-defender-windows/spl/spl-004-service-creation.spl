@@ -1,0 +1,23 @@
+```
+id: SPL-004
+name: Suspicious Windows service creation
+description: Service installed (7045 or 4697) with an image path that suggests remote execution or a
+   script host.
+platform: Splunk
+mitre_tactic: Persistence
+mitre_technique: T1543.003 Create or Modify System Process: Windows Service
+severity: High
+data_source: index=wineventlog (System, Security)
+false_positives: Software installers and endpoint management agents.
+tuning: Exclude known installer service names; require a path or command-line indicator.
+test_method: Install a test service whose image path starts with cmd.exe /c.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=wineventlog (sourcetype="WinEventLog:System" EventCode=7045) OR (sourcetype="WinEventLog:Security" EventCode=4697) earliest=-1h
+| eval image_path=coalesce(Service_File_Name, ImagePath)
+| eval svc=coalesce(Service_Name, ServiceName)
+| where match(image_path,"(?i)(psexesvc|%comspec%|cmd\.exe|powershell|pwsh|mshta|rundll32|regsvr32)") OR match(image_path,"^\\\\\\\\")
+| table _time host svc image_path
+| sort - _time

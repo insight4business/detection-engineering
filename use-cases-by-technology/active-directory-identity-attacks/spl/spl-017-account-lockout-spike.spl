@@ -1,0 +1,21 @@
+```
+id: SPL-017
+name: Account lockout spike
+description: Many distinct accounts locked out within a short window.
+platform: Splunk
+mitre_tactic: Credential Access
+mitre_technique: T1110 Brute Force
+severity: Medium
+data_source: index=wineventlog (Security)
+false_positives: Password policy change, expired service credentials.
+tuning: Tune the count to estate size; correlate with the source of failures.
+test_method: Lock out several lab accounts with repeated wrong passwords.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=wineventlog sourcetype="WinEventLog:Security" EventCode=4740 earliest=-1h
+| bin _time span=15m
+| stats dc(user) AS locked_accounts values(user) AS accounts values(Caller_Computer_Name) AS caller_hosts BY _time
+| where locked_accounts>=5
+| sort - locked_accounts

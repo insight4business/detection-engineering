@@ -1,0 +1,21 @@
+// Unit test for KQL-028 (Kerberoasting) using synthetic events.
+// Expected result: one row for client 192.0.2.44 with DistinctServices 5.
+// 192.0.2.45 uses AES (0x12) and must NOT appear. Computer accounts and krbtgt are ignored.
+let SecurityEvent = datatable(TimeGenerated:datetime, EventID:int, TargetUserName:string, IpAddress:string, ServiceName:string, TicketEncryptionType:string)
+[
+    datetime(2026-01-15 11:00:00), 4769, "user.one@CONTOSO.COM", "192.0.2.44", "svc-sql", "0x17",
+    datetime(2026-01-15 11:00:01), 4769, "user.one@CONTOSO.COM", "192.0.2.44", "svc-web", "0x17",
+    datetime(2026-01-15 11:00:02), 4769, "user.one@CONTOSO.COM", "192.0.2.44", "svc-file", "0x17",
+    datetime(2026-01-15 11:00:03), 4769, "user.one@CONTOSO.COM", "192.0.2.44", "svc-app", "0x17",
+    datetime(2026-01-15 11:00:04), 4769, "user.one@CONTOSO.COM", "192.0.2.44", "svc-backup", "0x17",
+    datetime(2026-01-15 11:00:05), 4769, "user.one@CONTOSO.COM", "192.0.2.44", "krbtgt", "0x17",
+    datetime(2026-01-15 11:05:00), 4769, "user.two@CONTOSO.COM", "192.0.2.45", "svc-sql", "0x12",
+    datetime(2026-01-15 11:05:01), 4769, "user.two@CONTOSO.COM", "192.0.2.45", "svc-web", "0x12"
+];
+let min_distinct_services = 5;
+SecurityEvent
+| where EventID == 4769
+| where TicketEncryptionType == "0x17"
+| where ServiceName !endswith "$" and ServiceName !~ "krbtgt"
+| summarize Tickets = count(), DistinctServices = dcount(ServiceName) by TargetUserName, IpAddress
+| where DistinctServices >= min_distinct_services

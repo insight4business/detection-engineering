@@ -1,0 +1,21 @@
+```
+id: SPL-015
+name: Process access to LSASS with dump-capable rights
+description: Sysmon process access events against LSASS from untrusted source images.
+platform: Splunk
+mitre_tactic: Credential Access
+mitre_technique: T1003.001 OS Credential Dumping: LSASS Memory
+severity: High
+data_source: index=sysmon (process access)
+false_positives: Security agents and diagnostic tools.
+tuning: Maintain an allow lookup of signed security agents by source image path.
+test_method: Run an Atomic Red Team LSASS test on an isolated lab endpoint.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=sysmon sourcetype="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational" EventCode=10 TargetImage="*\\lsass.exe" earliest=-1h
+    GrantedAccess IN ("0x1010","0x1410","0x1438","0x143a","0x1fffff")
+| search NOT [| inputlookup lsass_allowed_sources.csv | fields SourceImage]
+| table _time host SourceImage GrantedAccess CallTrace
+| sort - _time

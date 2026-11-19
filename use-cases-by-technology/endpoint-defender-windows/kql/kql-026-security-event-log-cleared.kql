@@ -1,0 +1,27 @@
+// ======================================================================
+// id: KQL-026
+// name: Windows event log cleared
+// description: The Security log (event 1102) or another log (System event 104) is cleared.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Defense Evasion
+// mitre_technique: T1070.001 Indicator Removal: Clear Windows Event Logs
+// severity: High
+// data_source: SecurityEvent; Event
+// false_positives: Rare, approved maintenance on lab or imaging workflows.
+// tuning: Exclude imaging servers; treat every other occurrence as an incident.
+// test_method: Clear the Security log on a lab host.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let SecurityCleared = SecurityEvent
+    | where TimeGenerated > ago(lookback)
+    | where EventID == 1102
+    | project TimeGenerated, Computer, Actor = strcat(SubjectDomainName, "\\", SubjectUserName), Log = "Security";
+let SystemCleared = Event
+    | where TimeGenerated > ago(lookback)
+    | where EventLog == "System" and EventID == 104 and Source == "Microsoft-Windows-Eventlog"
+    | project TimeGenerated, Computer, Actor = UserName, Log = "System";
+union SecurityCleared, SystemCleared

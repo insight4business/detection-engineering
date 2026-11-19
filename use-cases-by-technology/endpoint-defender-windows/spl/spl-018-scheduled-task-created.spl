@@ -1,0 +1,22 @@
+```
+id: SPL-018
+name: Scheduled task created with a script host or odd path
+description: Scheduled task creation (4698) whose action invokes a script host or a user-writable
+   path.
+platform: Splunk
+mitre_tactic: Persistence
+mitre_technique: T1053.005 Scheduled Task/Job: Scheduled Task
+severity: Medium
+data_source: index=wineventlog (Security)
+false_positives: Software updaters and administrative automation.
+tuning: Allow-list known task names and authors.
+test_method: Create a test task that runs powershell.exe from a temp folder.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=wineventlog sourcetype="WinEventLog:Security" EventCode=4698 earliest=-1h
+| eval task_xml=coalesce(Task_Content, TaskContent)
+| where match(task_xml,"(?i)(powershell|pwsh|cmd\.exe|wscript|cscript|mshta|rundll32|\\\\temp\\\\|\\\\appdata\\\\)")
+| table _time host Task_Name Subject_Account_Name task_xml
+| sort - _time

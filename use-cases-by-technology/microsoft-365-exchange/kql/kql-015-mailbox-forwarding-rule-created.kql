@@ -1,0 +1,33 @@
+// ======================================================================
+// id: KQL-015
+// name: Mailbox forwarding configured
+// description: Forwarding set through an inbox rule or mailbox setting, with higher severity when the
+//    destination is external.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Collection
+// mitre_technique: T1114.003 Email Collection: Email Forwarding Rule
+// severity: High
+// data_source: OfficeActivity
+// false_positives: Users forwarding to a personal address by policy exception; shared mailbox
+//    configurations.
+// tuning: Set internal_domains to your accepted domains; block external auto-forwarding with a
+//    transport rule and keep this as a backstop.
+// test_method: Create an inbox rule that forwards to an external lab address.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let internal_domains = dynamic(["contoso.com"]);   // replace with your accepted domains
+OfficeActivity
+| where TimeGenerated > ago(lookback)
+| where OfficeWorkload == "Exchange"
+| where Operation in ("New-InboxRule", "Set-InboxRule", "Set-Mailbox")
+| extend Params = tostring(Parameters)
+| where Params has_any ("ForwardTo", "ForwardAsAttachmentTo", "RedirectTo", "ForwardingSmtpAddress", "ForwardingAddress")
+| extend ForwardTarget = extract(@'"Name":"(?:ForwardTo|RedirectTo|ForwardAsAttachmentTo|ForwardingSmtpAddress|ForwardingAddress)","Value":"([^"]+)"', 1, Params)
+| extend ForwardDomain = tolower(extract(@'@([A-Za-z0-9.-]+)', 1, ForwardTarget))
+| extend IsExternal = isnotempty(ForwardDomain) and ForwardDomain !in (internal_domains)
+| extend AlertSeverity = iff(IsExternal, "High", "Low")
+| project TimeGenerated, UserId, ClientIP, Operation, ForwardTarget, ForwardDomain, IsExternal, AlertSeverity, Params

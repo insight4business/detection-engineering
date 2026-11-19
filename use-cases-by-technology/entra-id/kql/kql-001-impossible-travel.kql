@@ -1,0 +1,49 @@
+// ======================================================================
+// id: KQL-001
+// name: Impossible travel between successful sign-ins
+// description: Two successful sign-ins by the same user from locations whose distance implies a speed
+//    above a plausible travel speed.
+// platform: Microsoft Sentinel
+// schedule: every 1h, lookback 1d
+// mitre_tactic: Initial Access
+// mitre_technique: T1078.004 Valid Accounts: Cloud Accounts
+// severity: Medium
+// data_source: SigninLogs
+// false_positives: Corporate VPN or proxy egress points in different regions; mobile carriers with distant
+//    gateways; users on shared cloud desktops.
+// tuning: Exclude named locations and VPN egress IPs via a watchlist; raise max_speed_kmh; require
+//    a different country; ignore non-interactive sign-ins.
+// test_method: Sign in to a lab account from a VPN in one country, then from another country within 30
+//    minutes.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1d;
+let max_speed_kmh = 900;      // faster than a commercial flight
+let min_distance_km = 500;    // ignore short hops
+SigninLogs
+| where TimeGenerated > ago(lookback)
+| where ResultType == "0"
+| extend City = tostring(LocationDetails.city),
+         Country = tostring(LocationDetails.countryOrRegion),
+         Lat = todouble(LocationDetails.geoCoordinates.latitude),
+         Lon = todouble(LocationDetails.geoCoordinates.longitude)
+| where isnotnull(Lat) and isnotnull(Lon)
+| project TimeGenerated, UserPrincipalName, IPAddress, City, Country, Lat, Lon, AppDisplayName
+| sort by UserPrincipalName asc, TimeGenerated asc
+| serialize
+| extend PrevUser = prev(UserPrincipalName),
+         PrevTime = prev(TimeGenerated),
+         PrevIP = prev(IPAddress),
+         PrevCountry = prev(Country),
+         PrevCity = prev(City),
+         PrevLat = prev(Lat),
+         PrevLon = prev(Lon)
+| where UserPrincipalName == PrevUser and IPAddress != PrevIP
+| extend DistanceKm = geo_distance_2points(Lon, Lat, PrevLon, PrevLat) / 1000.0   // function returns metres
+| extend HoursBetween = datetime_diff('second', TimeGenerated, PrevTime) / 3600.0
+| where DistanceKm > min_distance_km and HoursBetween > 0
+| extend SpeedKmh = round(DistanceKm / HoursBetween, 0)
+| where SpeedKmh > max_speed_kmh
+| project TimeGenerated, UserPrincipalName, PrevTime, PrevIP, PrevCity, PrevCountry, IPAddress, City, Country, DistanceKm = round(DistanceKm, 0), SpeedKmh, AppDisplayName

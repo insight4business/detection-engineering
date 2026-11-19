@@ -1,0 +1,39 @@
+// ======================================================================
+// id: KQL-019
+// name: New account created and given a privileged role
+// description: A new cloud account is created and added to a directory role within a short window.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1d
+// mitre_tactic: Persistence
+// mitre_technique: T1136.003 Create Account: Cloud Account
+// severity: High
+// data_source: AuditLogs
+// false_positives: Onboarding of new administrators following the joiner process.
+// tuning: Correlate with HR or ticket data; shorten role_window for stricter matching.
+// test_method: Create a lab user and assign a directory role within a few minutes.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1d;
+let role_window = 1h;
+let Created = AuditLogs
+    | where TimeGenerated > ago(lookback)
+    | where OperationName == "Add user" and Result == "success"
+    | project CreatedTime = TimeGenerated,
+              NewUser = tolower(tostring(TargetResources[0].userPrincipalName)),
+              Creator = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName));
+let RoleAdds = AuditLogs
+    | where TimeGenerated > ago(lookback)
+    | where OperationName in ("Add member to role", "Add eligible member to role") and Result == "success"
+    | mv-apply Prop = TargetResources[0].modifiedProperties on (
+        where tostring(Prop.displayName) == "Role.DisplayName"
+        | extend RoleName = trim('"', tostring(Prop.newValue)))
+    | project RoleTime = TimeGenerated,
+              NewUser = tolower(tostring(TargetResources[0].userPrincipalName)),
+              RoleName,
+              RoleAssigner = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName));
+Created
+| join kind=inner RoleAdds on NewUser
+| where RoleTime between (CreatedTime .. (CreatedTime + role_window))
+| project CreatedTime, RoleTime, NewUser, Creator, RoleAssigner, RoleName

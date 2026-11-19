@@ -1,0 +1,34 @@
+// ======================================================================
+// id: KQL-020
+// name: Lateral movement: one account logs on to many devices remotely
+// description: An account performs remote logons to many distinct devices in a short window.
+// platform: Microsoft Defender XDR
+// schedule: every 1h, lookback 1h
+// mitre_tactic: Lateral Movement
+// mitre_technique: T1021 Remote Services
+// severity: Medium
+// data_source: DeviceLogonEvents
+// false_positives: Patching, inventory and monitoring accounts; helpdesk and jump hosts.
+// tuning: Exclude known management accounts and jump hosts; limit logon types to RemoteInteractive
+//    to reduce noise.
+// test_method: Use a lab account to open RDP sessions to several lab hosts in one hour.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let min_distinct_devices = 5;
+let remote_logon_types = dynamic(["RemoteInteractive", "Network"]);
+DeviceLogonEvents
+| where Timestamp > ago(lookback)
+| where ActionType == "LogonSuccess"
+| where LogonType in (remote_logon_types)
+| where isnotempty(AccountName) and not(AccountName endswith "$")
+| summarize Devices = dcount(DeviceName),
+            DeviceList = make_set(DeviceName, 20),
+            SourceIPs = make_set(RemoteIP, 10),
+            FirstLogon = min(Timestamp),
+            LastLogon = max(Timestamp)
+    by AccountDomain, AccountName
+| where Devices >= min_distinct_devices
+| project FirstLogon, LastLogon, AccountDomain, AccountName, Devices, DeviceList, SourceIPs

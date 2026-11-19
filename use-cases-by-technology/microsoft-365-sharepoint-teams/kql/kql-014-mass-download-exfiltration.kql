@@ -1,0 +1,37 @@
+// ======================================================================
+// id: KQL-014
+// name: Mass file download from SharePoint or OneDrive
+// description: One user downloads an unusually high number of files in a short window.
+// platform: Microsoft Sentinel
+// schedule: every 1h, lookback 1h
+// mitre_tactic: Exfiltration
+// mitre_technique: T1567 Exfiltration Over Web Service
+// severity: Medium
+// data_source: OfficeActivity
+// false_positives: Backup or sync tools; users preparing a migration; departing-employee processes approved
+//    by HR.
+// tuning: Exclude sync service accounts; use a per-user baseline instead of a fixed threshold; add
+//    a departing-employee watchlist.
+// test_method: Download more than the threshold number of files from a lab document library within one
+//    hour.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let min_downloads = 100;
+let excluded_users = dynamic(["svc-sync@contoso.com"]);   // placeholder service account
+OfficeActivity
+| where TimeGenerated > ago(lookback)
+| where OfficeWorkload in ("SharePoint", "OneDrive")
+| where Operation in ("FileDownloaded", "FileSyncDownloadedFull")
+| where UserId !in~ (excluded_users)
+| summarize Downloads = count(),
+            DistinctFiles = dcount(OfficeObjectId),
+            DistinctSites = dcount(Site_Url),
+            SourceIPs = make_set(ClientIP, 10),
+            FirstDownload = min(TimeGenerated),
+            LastDownload = max(TimeGenerated)
+    by UserId
+| where Downloads >= min_downloads
+| project FirstDownload, LastDownload, UserId, Downloads, DistinctFiles, DistinctSites, SourceIPs

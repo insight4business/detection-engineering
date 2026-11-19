@@ -1,0 +1,38 @@
+// ======================================================================
+// id: KQL-013
+// name: Storage account or container public access enabled
+// description: A storage account is changed to allow public blob access or a container is set to public
+//    read.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Collection
+// mitre_technique: T1530 Data from Cloud Storage
+// severity: High
+// data_source: AzureActivity
+// false_positives: Intentional public static content hosting.
+// tuning: Allow-list approved static-content storage accounts; pair with a preventive policy that
+//    denies public access.
+// test_method: Enable public blob access on a lab storage account and set a container to blob-level
+//    access.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let public_container_levels = dynamic(["Blob", "Container"]);
+let AccountChanges = AzureActivity
+    | where TimeGenerated > ago(lookback)
+    | where OperationNameValue =~ "MICROSOFT.STORAGE/STORAGEACCOUNTS/WRITE"
+    | where ActivityStatusValue in~ ("Success", "Succeeded")
+    | extend Body = parse_json(tostring(Properties_d.requestbody))
+    | where tobool(Body.properties.allowBlobPublicAccess) == true
+    | extend Finding = "Account allows blob public access";
+let ContainerChanges = AzureActivity
+    | where TimeGenerated > ago(lookback)
+    | where OperationNameValue =~ "MICROSOFT.STORAGE/STORAGEACCOUNTS/BLOBSERVICES/CONTAINERS/WRITE"
+    | where ActivityStatusValue in~ ("Success", "Succeeded")
+    | extend Body = parse_json(tostring(Properties_d.requestbody))
+    | where tostring(Body.properties.publicAccess) in~ (public_container_levels)
+    | extend Finding = "Container set to public access";
+union AccountChanges, ContainerChanges
+| project TimeGenerated, Caller, CallerIpAddress, Finding, ResourceGroup, Resource, SubscriptionId, _ResourceId

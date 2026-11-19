@@ -1,0 +1,21 @@
+```
+id: SPL-022
+name: Network security group or firewall rule changed (Azure)
+description: Create, update or delete of NSG and firewall resources in the activity log.
+platform: Splunk
+mitre_tactic: Defense Evasion
+mitre_technique: T1562.007 Impair Defenses: Disable or Modify Cloud Firewall
+severity: Medium
+data_source: index=azure (activity log)
+false_positives: Approved network changes via pipelines.
+tuning: Exclude the infrastructure pipeline identity.
+test_method: Add an inbound any-source rule to a lab NSG.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=azure sourcetype="mscs:azure:eventhub" category=Administrative earliest=-1h
+    (operationName="MICROSOFT.NETWORK/NETWORKSECURITYGROUPS/*" OR operationName="MICROSOFT.NETWORK/AZUREFIREWALLS/*" OR operationName="MICROSOFT.NETWORK/FIREWALLPOLICIES/*")
+    (operationName="*/WRITE" OR operationName="*/DELETE") resultType IN ("Success","Succeeded")
+| table _time caller callerIpAddress operationName resourceId
+| sort - _time

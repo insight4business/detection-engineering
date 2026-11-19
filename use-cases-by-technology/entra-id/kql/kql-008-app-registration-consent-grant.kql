@@ -1,0 +1,36 @@
+// ======================================================================
+// id: KQL-008
+// name: New application registration or consent grant
+// description: New app registrations, delegated permission grants and application consent, escalated
+//    when high-risk scopes are present.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Credential Access
+// mitre_technique: T1528 Steal Application Access Token
+// severity: Medium
+// data_source: AuditLogs
+// false_positives: Developers registering apps; approved vendor integrations granted admin consent.
+// tuning: Restrict user consent in the tenant; allow-list approved publishers; review the
+//    risky_scopes list.
+// test_method: Register an app in a lab tenant and grant a mail-read delegated permission.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let risky_scopes = dynamic([
+    "Mail.Read", "Mail.ReadWrite", "Mail.Send", "MailboxSettings.ReadWrite", "Files.Read.All",
+    "Files.ReadWrite.All", "Directory.ReadWrite.All", "User.Read.All", "offline_access", "full_access_as_app"]);
+AuditLogs
+| where TimeGenerated > ago(lookback)
+| where OperationName in ("Add application", "Consent to application", "Add delegated permission grant", "Add app role assignment to service principal")
+| where Result == "success"
+| extend Actor = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName)),
+         AppName = tostring(TargetResources[0].displayName),
+         Details = tostring(TargetResources)
+| extend RiskyScopeHit = Details has_any (risky_scopes)
+| extend AlertSeverity = case(
+        OperationName == "Consent to application" and RiskyScopeHit, "High",
+        OperationName == "Consent to application", "Medium",
+        "Low")
+| project TimeGenerated, OperationName, Actor, AppName, RiskyScopeHit, AlertSeverity, CorrelationId

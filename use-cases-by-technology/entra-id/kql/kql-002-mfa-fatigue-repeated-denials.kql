@@ -1,0 +1,46 @@
+// ======================================================================
+// id: KQL-002
+// name: MFA fatigue: repeated MFA denials followed by success
+// description: Many MFA prompts denied or ignored for one user in a short window, optionally followed
+//    by a successful sign-in (push bombing).
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1d
+// mitre_tactic: Credential Access
+// mitre_technique: T1621 Multi-Factor Authentication Request Generation
+// severity: High
+// data_source: SigninLogs
+// false_positives: Users with a broken authenticator app or a new phone; traveling users with poor
+//    connectivity.
+// tuning: Raise min_mfa_denials; require success after denials for High severity; exclude service
+//    desk test accounts.
+// test_method: In a lab tenant, deny or ignore five or more MFA push prompts for one test user, then
+//    approve one.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1d;
+let window = 10m;
+let min_mfa_denials = 5;
+let mfa_failure_codes = dynamic(["500121"]);   // strong authentication failed (denied or timed out)
+let Denials = SigninLogs
+    | where TimeGenerated > ago(lookback)
+    | where ResultType in (mfa_failure_codes)
+    | summarize Denials = count(),
+                FirstDenial = min(TimeGenerated),
+                LastDenial = max(TimeGenerated),
+                SourceIPs = make_set(IPAddress, 10),
+                Apps = make_set(AppDisplayName, 10)
+        by UserPrincipalName, Window = bin(TimeGenerated, window)
+    | where Denials >= min_mfa_denials;
+let Successes = SigninLogs
+    | where TimeGenerated > ago(lookback)
+    | where ResultType == "0"
+    | project UserPrincipalName, SuccessTime = TimeGenerated, SuccessIP = IPAddress;
+Denials
+| join kind=leftouter Successes on UserPrincipalName
+| extend SuccessAfterDenials = isnotnull(SuccessTime) and SuccessTime >= LastDenial and SuccessTime <= LastDenial + 1h
+| extend SourceIPs = tostring(SourceIPs), Apps = tostring(Apps)
+| summarize SuccessAfterDenials = max(toint(SuccessAfterDenials)) by UserPrincipalName, Window, Denials, FirstDenial, LastDenial, SourceIPs, Apps
+| extend AlertSeverity = iff(SuccessAfterDenials == 1, "High", "Medium")
+| project Window, UserPrincipalName, Denials, FirstDenial, LastDenial, SuccessAfterDenials, AlertSeverity, SourceIPs, Apps

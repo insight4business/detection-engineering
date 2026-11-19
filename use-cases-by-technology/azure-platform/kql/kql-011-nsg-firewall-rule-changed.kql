@@ -1,0 +1,38 @@
+// ======================================================================
+// id: KQL-011
+// name: Network security group or firewall rule changed
+// description: Create, update or delete of NSG rules and Azure Firewall objects, flagged when a rule
+//    opens access to any source.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Defense Evasion
+// mitre_technique: T1562.007 Impair Defenses: Disable or Modify Cloud Firewall
+// severity: Medium
+// data_source: AzureActivity
+// false_positives: Planned network changes made through approved pipelines.
+// tuning: Exclude the infrastructure pipeline identity; raise severity only for any-source inbound
+//    rules.
+// test_method: Add an inbound allow rule with source any to a lab NSG.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let network_operations = dynamic([
+    "MICROSOFT.NETWORK/NETWORKSECURITYGROUPS/WRITE",
+    "MICROSOFT.NETWORK/NETWORKSECURITYGROUPS/DELETE",
+    "MICROSOFT.NETWORK/NETWORKSECURITYGROUPS/SECURITYRULES/WRITE",
+    "MICROSOFT.NETWORK/NETWORKSECURITYGROUPS/SECURITYRULES/DELETE",
+    "MICROSOFT.NETWORK/AZUREFIREWALLS/WRITE",
+    "MICROSOFT.NETWORK/AZUREFIREWALLS/DELETE",
+    "MICROSOFT.NETWORK/FIREWALLPOLICIES/WRITE",
+    "MICROSOFT.NETWORK/FIREWALLPOLICIES/DELETE"]);
+AzureActivity
+| where TimeGenerated > ago(lookback)
+| where CategoryValue == "Administrative"
+| where OperationNameValue in~ (network_operations)
+| where ActivityStatusValue in~ ("Success", "Succeeded")
+| extend Body = tostring(Properties_d.requestbody)
+| extend OpensToAnySource = Body matches regex @'"sourceAddressPrefix"\s*:\s*"(\*|0\.0\.0\.0/0|Internet)"'
+| extend AlertSeverity = iff(OpensToAnySource, "High", "Medium")
+| project TimeGenerated, Caller, CallerIpAddress, OperationNameValue, ResourceGroup, Resource, OpensToAnySource, AlertSeverity, SubscriptionId, _ResourceId

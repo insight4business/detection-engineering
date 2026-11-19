@@ -1,0 +1,22 @@
+```
+id: SPL-016
+name: Remote logon fan-out across many hosts
+description: One account performs network or remote-interactive logons to many distinct hosts.
+platform: Splunk
+mitre_tactic: Lateral Movement
+mitre_technique: T1021 Remote Services
+severity: Medium
+data_source: index=wineventlog (Security)
+false_positives: Patching, monitoring and helpdesk accounts; jump hosts.
+tuning: Exclude management accounts via lookup; limit to logon type 10 for lower noise.
+test_method: Use a lab account to open RDP sessions to several hosts.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=wineventlog sourcetype="WinEventLog:Security" EventCode=4624 Logon_Type IN (3,10) earliest=-1h
+| where NOT match(user,"\$$") AND user!="ANONYMOUS LOGON"
+| stats dc(host) AS hosts values(host) AS host_list values(src) AS sources min(_time) AS first_seen max(_time) AS last_seen BY user
+| where hosts>=5
+| convert ctime(first_seen) ctime(last_seen)
+| sort - hosts

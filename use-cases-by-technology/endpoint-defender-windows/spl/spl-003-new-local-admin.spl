@@ -1,0 +1,23 @@
+```
+id: SPL-003
+name: Member added to local Administrators group
+description: A user or group is added to the built-in Administrators group (4732).
+platform: Splunk
+mitre_tactic: Persistence
+mitre_technique: T1098 Account Manipulation
+severity: High
+data_source: index=wineventlog (Security)
+false_positives: IT onboarding and approved break-fix; endpoint management tools that add helpdesk
+   groups.
+tuning: Exclude approved management accounts; focus on servers and workstations outside the
+   imaging process.
+test_method: Add a lab user to the local Administrators group on a test host.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=wineventlog sourcetype="WinEventLog:Security" EventCode=4732 earliest=-1h
+| search Group_Name="Administrators" OR Group_Domain="Builtin"
+| eval actor=coalesce(src_user, Subject_Account_Name)
+| table _time host actor Member_Security_ID Group_Name
+| sort - _time

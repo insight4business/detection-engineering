@@ -1,0 +1,30 @@
+// ======================================================================
+// id: KQL-012
+// name: Azure Policy assignment deleted or exempted
+// description: Removal of policy assignments or definitions, or creation of exemptions, which weakens
+//    preventive guardrails.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Defense Evasion
+// mitre_technique: T1562 Impair Defenses
+// severity: High
+// data_source: AzureActivity
+// false_positives: Governance team rebuilding assignments during a landing-zone change.
+// tuning: Exclude the governance pipeline identity; require a change record for suppression.
+// test_method: Delete a test policy assignment at a lab subscription scope.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let policy_operations = dynamic([
+    "MICROSOFT.AUTHORIZATION/POLICYASSIGNMENTS/DELETE",
+    "MICROSOFT.AUTHORIZATION/POLICYDEFINITIONS/DELETE",
+    "MICROSOFT.AUTHORIZATION/POLICYSETDEFINITIONS/DELETE",
+    "MICROSOFT.AUTHORIZATION/POLICYEXEMPTIONS/WRITE"]);
+AzureActivity
+| where TimeGenerated > ago(lookback)
+| where CategoryValue == "Administrative"
+| where OperationNameValue in~ (policy_operations)
+| where ActivityStatusValue in~ ("Success", "Succeeded")
+| project TimeGenerated, Caller, CallerIpAddress, OperationNameValue, ResourceGroup, Resource, SubscriptionId, _ResourceId

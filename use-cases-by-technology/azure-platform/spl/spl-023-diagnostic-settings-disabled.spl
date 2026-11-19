@@ -1,0 +1,21 @@
+```
+id: SPL-023
+name: Diagnostic settings or log workspace deleted (Azure)
+description: Deletion of diagnostic settings or log workspaces.
+platform: Splunk
+mitre_tactic: Defense Evasion
+mitre_technique: T1562.008 Impair Defenses: Disable or Modify Cloud Logs
+severity: High
+data_source: index=azure (activity log)
+false_positives: Approved decommissioning.
+tuning: Exclude decommission pipelines; pair with a missing-data alert.
+test_method: Delete a diagnostic setting on a lab resource.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=azure sourcetype="mscs:azure:eventhub" category=Administrative earliest=-1h
+    operationName IN ("MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE","MICROSOFT.OPERATIONALINSIGHTS/WORKSPACES/DELETE")
+    resultType IN ("Success","Succeeded")
+| table _time caller callerIpAddress operationName resourceId
+| sort - _time

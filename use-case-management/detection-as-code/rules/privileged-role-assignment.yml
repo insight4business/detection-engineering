@@ -1,0 +1,40 @@
+# Example rule definition in a generic, tool-neutral schema.
+# A deployment script maps these fields to your SIEM (for example, Sentinel analytic rule or Splunk saved search).
+id: KQL-006
+name: Privileged directory role assigned
+version: 1
+status: Draft
+owner: <OWNER>
+review_date: 2027-05-19
+objective: >
+  Detect additions to privileged directory roles that may indicate persistence or privilege escalation at Contoso Ltd.
+platform: Microsoft Sentinel
+mitre:
+  tactic: Persistence
+  technique: T1098.003
+  sub_techniques: []
+data_sources:
+  - table_or_index: AuditLogs
+    required_fields: [OperationName, Result, InitiatedBy, TargetResources]
+    prerequisite: Entra ID audit logs connector enabled
+logic:
+  summary: Alert when a member is added to a role from the privileged_roles list.
+  query_file: ../../../use-cases-by-technology/entra-id/kql/kql-006-privileged-role-assignment.kql
+  schedule: every 15m, lookback 1h
+thresholds:
+  - name: privileged_roles
+    default: "list defined at the top of the query"
+    rationale: Aligned with the tiering model
+severity: High
+false_positives:
+  - Approved joiner, mover or break-glass activity
+tuning_guidance:
+  - Correlate with change tickets
+  - Exclude the identity governance automation identity
+response_playbook: <PLAYBOOK_LINK>
+test_method:
+  approach: lab simulation
+  reference: ../tests/privileged-role-assignment.test.yml
+  acceptance_criteria:
+    - Alert fires within 20 minutes of a role assignment to a lab user
+    - No alert for a non-privileged role

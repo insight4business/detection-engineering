@@ -1,0 +1,28 @@
+# Example test case for a rule. A runner (not included) feeds the input events to the query
+# in a lab workspace and compares the result with the expectation.
+rule_id: KQL-006
+cases:
+  - name: privileged role assigned (should alert)
+    type: positive
+    input:
+      table: AuditLogs
+      events:
+        - OperationName: Add member to role
+          Result: success
+          Actor: admin.alpha@contoso.com
+          Target: lab.user1@contoso.com
+          Role.DisplayName: Global Administrator
+    expect:
+      alerts: 1
+  - name: non-privileged role assigned (should not alert)
+    type: negative
+    input:
+      table: AuditLogs
+      events:
+        - OperationName: Add member to role
+          Result: success
+          Actor: admin.alpha@contoso.com
+          Target: lab.user2@contoso.com
+          Role.DisplayName: Reports Reader
+    expect:
+      alerts: 0

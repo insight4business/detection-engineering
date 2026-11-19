@@ -1,0 +1,20 @@
+```
+id: SPL-020
+name: Mass file download from SharePoint or OneDrive (Office 365)
+description: One user downloads a large number of files within an hour.
+platform: Splunk
+mitre_tactic: Collection
+mitre_technique: T1530 Data from Cloud Storage
+severity: Medium
+data_source: index=o365
+false_positives: Sync clients and approved migrations.
+tuning: Exclude sync service accounts; use per-user baselines.
+test_method: Download more than 100 files from a lab library in one hour.
+owner: <OWNER>
+status: Draft
+last_review: 2026-11-19
+```
+index=o365 sourcetype="o365:management:activity" Workload IN ("SharePoint","OneDrive") Operation IN ("FileDownloaded","FileSyncDownloadedFull") earliest=-1h
+| stats count AS downloads dc(ObjectId) AS distinct_files values(ClientIP) AS source_ips BY UserId
+| where downloads>=100
+| sort - downloads

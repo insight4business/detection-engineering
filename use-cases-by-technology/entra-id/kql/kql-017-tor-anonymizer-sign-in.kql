@@ -1,0 +1,35 @@
+// ======================================================================
+// id: KQL-017
+// name: Sign-in from TOR or anonymizer address
+// description: Interactive or non-interactive sign-ins from addresses listed in the TorExitNodes
+//    watchlist.
+// platform: Microsoft Sentinel
+// schedule: every 1h, lookback 1d
+// mitre_tactic: Command and Control
+// mitre_technique: T1090.003 Proxy: Multi-hop Proxy
+// severity: Medium
+// data_source: SigninLogs; AADNonInteractiveUserSignInLogs; Watchlist TorExitNodes
+// false_positives: Privacy-conscious users or researchers; stale watchlist entries.
+// tuning: Refresh the watchlist at least daily from a threat intelligence feed; High severity only
+//    for successful sign-ins.
+// test_method: Sign in to a lab account through the TOR browser after loading the watchlist sample plus
+//    a live exit node.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1d;
+let TorNodes = _GetWatchlist('TorExitNodes')
+    | project IPAddress = tostring(SearchKey);
+union SigninLogs, AADNonInteractiveUserSignInLogs
+| where TimeGenerated > ago(lookback)
+| where IPAddress in (TorNodes)
+| extend Outcome = iff(ResultType == "0", "Success", "Failure")
+| summarize Attempts = count(),
+            Successes = countif(Outcome == "Success"),
+            Apps = make_set(AppDisplayName, 10),
+            FirstSeen = min(TimeGenerated),
+            LastSeen = max(TimeGenerated)
+    by UserPrincipalName, IPAddress
+| extend AlertSeverity = iff(Successes > 0, "High", "Medium")
+| project FirstSeen, LastSeen, UserPrincipalName, IPAddress, Attempts, Successes, AlertSeverity, Apps

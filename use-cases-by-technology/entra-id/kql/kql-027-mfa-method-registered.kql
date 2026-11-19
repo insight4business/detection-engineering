@@ -1,0 +1,32 @@
+// ======================================================================
+// id: KQL-027
+// name: MFA method registered or changed
+// description: Security info (MFA method) registered, deleted or changed, with escalation for
+//    privileged accounts and admin-initiated changes.
+// platform: Microsoft Sentinel
+// schedule: every 15m, lookback 1h
+// mitre_tactic: Persistence
+// mitre_technique: T1556.006 Modify Authentication Process: Multi-Factor Authentication
+// severity: Medium
+// data_source: AuditLogs; Watchlist PrivilegedAccounts
+// false_positives: New joiners enrolling, device replacement, helpdesk-assisted resets.
+// tuning: Exclude the helpdesk group; correlate with a recent risky sign-in for the same user.
+// test_method: Register a new authentication method for a lab user.
+// owner: <OWNER>
+// status: Draft
+// last_review: 2026-11-19
+// ======================================================================
+let lookback = 1h;
+let PrivAccounts = _GetWatchlist('PrivilegedAccounts')
+    | project TargetUser = tolower(tostring(SearchKey));
+AuditLogs
+| where TimeGenerated > ago(lookback)
+| where OperationName in ("User registered security info", "User deleted security info", "User changed default security info", "Admin registered security info", "Admin deleted security info")
+| where Result == "success"
+| extend Actor = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName)),
+         ActorIP = tostring(InitiatedBy.user.ipAddress),
+         TargetUser = tolower(tostring(TargetResources[0].userPrincipalName))
+| extend AdminInitiated = OperationName startswith "Admin" or (tolower(Actor) != TargetUser)
+| extend IsPrivileged = TargetUser in (PrivAccounts)
+| extend AlertSeverity = iff(IsPrivileged or AdminInitiated, "High", "Medium")
+| project TimeGenerated, OperationName, Actor, ActorIP, TargetUser, AdminInitiated, IsPrivileged, AlertSeverity
